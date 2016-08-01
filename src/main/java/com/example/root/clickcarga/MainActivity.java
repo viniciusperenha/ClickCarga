@@ -15,84 +15,88 @@ import android.os.Bundle;
 import android.telephony.TelephonyManager;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.Toast;
 import android.widget.VideoView;
-import com.example.root.clickcarga.Entidades.ClasseGlobal;
+
 import com.example.root.clickcarga.Entidades.Midia;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Timer;
+
 
 
 public class MainActivity extends ActionBarActivity{
 
     public VideoView video;
     public ImageView imagem;
-    public Timer timer;
+
     public Bitmap myBitmap = null;
     public int duracao = 0;
     public static SQLiteDatabase db;
-    public String servidorrest = "http://192.168.25.2:8080/clickCarga/rest/rest/";
-    public String servidorarquivo = "http://192.168.25.2:8080/clickCarga/arquivoPasta/?id=";
+    public String servidorrest = "http://192.168.1.44:8084/clickCarga/rest/rest/";
+    public String servidorarquivo = "http://192.168.1.44:8084/clickCarga/arquivoPasta/?id=";
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        try {
+            Runtime.getRuntime().exec("service call activity 42 s16 com.android.systemui");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         setContentView(R.layout.activity_main);
+
+        
         video = (VideoView)  findViewById(R.id.video);
         imagem = (ImageView) findViewById(R.id.imagem);
         video.setVisibility(View.INVISIBLE);
         imagem.setVisibility(View.INVISIBLE);
-        final ClasseGlobal classeGlobal = (ClasseGlobal) getApplicationContext();
+
         criaBanco();
         if(!verificaTabelasBanco()){
             criaTabelasBanco();
         }
-        File dir = getFileStreamPath("Pictures");
+        File dir = new File("sdcard/Pictures");
         if (!dir.exists()){
             dir.mkdirs();
         }
+
         if(checkConexaoInternet(getApplicationContext())) {
             consultaWebService();
         }
 
     }
 
+
+
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        final ClasseGlobal classeGlobal = (ClasseGlobal) getApplicationContext();
-        classeGlobal.setProgramacaovigente(buscaProgramacao());
-        if(classeGlobal.getProgramacaovigente()!=null) {
+        if(buscaProgramacao()!=null) {
             new trocadorDeImagens().execute();
         }
     }
 
-    public List<Midia> buscaProgramacao(){
-        Cursor c = db.rawQuery("select * from midia order by ordem",null);
-        if(c.moveToFirst()){
-            List<Midia> mds = new LinkedList<>();
-            for(int i=0;i<c.getCount();i++){
-                Midia m = new Midia();
-                m.setId(c.getLong(c.getColumnIndexOrThrow("id")));
-                m.setArquivo(c.getString(c.getColumnIndexOrThrow("arquivo")));
-                m.setDuracao(c.getLong(c.getColumnIndexOrThrow("duracao")));
-                m.setOrdem(c.getLong(c.getColumnIndexOrThrow("ordem")));
-                mds.add(m);
-                c.moveToNext();
-            }
-            return mds;
+    public void StartSistema(View v){
+        if(buscaProgramacao()!=null) {
+            new trocadorDeImagens().execute();
         }
-        return null;
     }
 
     private void criaBanco() {
@@ -110,7 +114,7 @@ public class MainActivity extends ActionBarActivity{
 
     public void consultaWebService(){
         String imei = buscaImeiAparelho();
-        final ServidorRestTask servidorRestTask = new ServidorRestTask(MainActivity.this ,servidorrest, servidorarquivo, imei, db);
+        ServidorRestTask servidorRestTask = new ServidorRestTask(servidorrest, servidorarquivo, imei, db);
         servidorRestTask.execute();
 
     }
@@ -118,11 +122,6 @@ public class MainActivity extends ActionBarActivity{
     public String buscaImeiAparelho(){
         TelephonyManager telephonyManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
         return telephonyManager.getDeviceId();
-    }
-
-
-    public void executarSistema(View v){
-        new trocadorDeImagens().execute();
     }
 
     public void abrirFoto(File f){
@@ -181,8 +180,8 @@ public class MainActivity extends ActionBarActivity{
 
     public void criaTabelasBanco()  {
         try {
-            final ClasseGlobal classeGlobal = (ClasseGlobal) getApplicationContext();
-            for (String s : classeGlobal.getClasses()) {
+
+            for (String s : getClasses()) {
                 Class<?> aClass = Class.forName("com.example.root.clickcarga.Entidades." + s);
                 StringBuilder sb = new StringBuilder();
                 sb.append("CREATE TABLE if not exists " + s.toLowerCase() + "(");
@@ -205,6 +204,10 @@ public class MainActivity extends ActionBarActivity{
         }
     }
 
+    public String[] getClasses() {
+        return new String[]{"Midia"};
+    }
+
     public String tipoSql(Class tipo){
 
         if (tipo.equals(String.class)) return "varchar(100)";
@@ -214,59 +217,86 @@ public class MainActivity extends ActionBarActivity{
         if (tipo.equals(double.class)) return "double(7,2)";
         if (tipo.equals(BigInteger.class)) return "bigint";
         if (tipo.equals(Integer.class)) return "int";
-
-        //return tipo.toString();
         return "long";
     }
 
+    public List<Midia> buscaProgramacao(){
+        Cursor c = db.rawQuery("select * from midia order by ordem",null);
+        if(c.moveToFirst()){
+            List<Midia> mds = new LinkedList<Midia>();
+            for(int i=0;i<c.getCount();i++){
+                Midia m = new Midia();
+                m.setId(c.getLong(c.getColumnIndexOrThrow("id")));
+                m.setArquivo(c.getString(c.getColumnIndexOrThrow("arquivo")));
+                m.setDuracao(c.getLong(c.getColumnIndexOrThrow("duracao")));
+                m.setOrdem(c.getLong(c.getColumnIndexOrThrow("ordem")));
+                mds.add(m);
+                c.moveToNext();
+            }
+            return mds;
+        }
+        return null;
+    }
 
     class trocadorDeImagens extends AsyncTask<String, String, String>{
 
         @Override
         protected String doInBackground(String... params) {
 
-            File f = new File("/sdcard/Pictures");
+            List<Midia> m = buscaProgramacao();
+            System.out.println("------------------"+m);
+            for(int i = 0; i< m.size();i++){
+                System.out.println("/sdcard/Pictures/"+m.get(i).getArquivo());
+                File file = new File("/sdcard/Pictures/"+m.get(i).getArquivo());
+                if(file.exists()) {
+                    if (file.getName().toLowerCase().endsWith(".jpg") || file.getName().toLowerCase().endsWith(".png")) {
+                        publishProgress(file.getAbsolutePath());
+                        try {
+                            Thread.sleep(m.get(i).getDuracao() * 1000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (file.getName().toLowerCase().endsWith(".3gp") || file.getName().toLowerCase().endsWith(".mp4")) {
+                        publishProgress(file.getAbsolutePath());
 
-            File[] filelist = f.listFiles();
-            ClasseGlobal classeGlobal = (ClasseGlobal) getApplicationContext();
-            for(int i = 0; i< classeGlobal.getProgramacaovigente().size();i++){
-                File file = new File("/sdcard/Pictures/"+filelist[i].getName());
-                System.out.println(file.getName().toLowerCase());
-                if (file.getName().toLowerCase().endsWith(".jpg") || file.getName().toLowerCase().endsWith(".png")) {
-                    publishProgress(file.getAbsolutePath());
-                    try {
-                        Thread.sleep(classeGlobal.getProgramacaovigente().get(i).getDuracao()*1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                } else if (file.getName().toLowerCase().endsWith(".3gp") || file.getName().toLowerCase().endsWith(".mp4")) {
-                    publishProgress(file.getAbsolutePath());
+                        try {
+                            Thread.sleep(800);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
 
-                    try {
-                        Thread.sleep(800);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    System.out.println("duracao do video "+duracao);
-                    try {
-                        Thread.sleep(duracao);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                        try {
+                            Thread.sleep(duracao);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
 
-                if(i==classeGlobal.getProgramacaovigente().size()){
-                    i=0;
-                }
+                //if(i==m.size()-1){
+                //   if(checkConexaoInternet(getApplicationContext())){
+                //        consultaWebService();
+                //    }
+                //    m = buscaProgramacao();
+                //    i=-1;
+                //}
 
             }
             return null;
         }
 
         @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            consultaWebService();
+            new trocadorDeImagens().execute();
+        }
+
+        @Override
         protected void onProgressUpdate(String... values) {
             File file=new File(values[0]);
-            if (file.getName().toLowerCase().endsWith(".jpg") || file.getName().toLowerCase().endsWith(".png")) {
+            if (file.getName().toLowerCase().endsWith(".jpg") || file.getName().toLowerCase().endsWith(".png") || file.getName().toLowerCase().endsWith(".gif") || file.getName().toLowerCase().endsWith(".jpeg")) {
                 if(myBitmap!=null) {
                     myBitmap=null;
                 }
@@ -285,7 +315,7 @@ public class MainActivity extends ActionBarActivity{
                     }
                 });
 
-            } else if (file.getName().toLowerCase().endsWith(".3gp") || file.getName().toLowerCase().endsWith(".mp4")) {
+            } else if (file.getName().toLowerCase().endsWith(".avi") || file.getName().toLowerCase().endsWith(".mp4")|| file.getName().toLowerCase().endsWith(".mpeg")) {
                 video.setVisibility(View.VISIBLE);
                 imagem.setVisibility(View.INVISIBLE);
                 video.setVideoPath(file.getAbsolutePath());

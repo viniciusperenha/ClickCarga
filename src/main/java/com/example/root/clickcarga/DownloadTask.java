@@ -2,10 +2,9 @@ package com.example.root.clickcarga;
 
 import android.content.Context;
 import android.os.AsyncTask;
-import android.os.PowerManager;
 import android.widget.Toast;
 
-import com.example.root.clickcarga.Entidades.ClasseGlobal;
+
 import com.example.root.clickcarga.Entidades.Midia;
 
 import java.io.File;
@@ -15,6 +14,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+
 import java.util.List;
 
 /**
@@ -22,18 +22,19 @@ import java.util.List;
  */
 public class DownloadTask extends AsyncTask<String, Integer, String> {
 
-    private Context context;
+
     public List<Midia> lista;
 
-    public DownloadTask(Context context, List<Midia> lista) {
-        this.context = context;
+    public DownloadTask(List<Midia> lista) {
+
         this.lista = lista;
     }
 
     @Override
     protected String doInBackground(String... sUrl) {
+        System.out.println("---------------thread download --"+lista);
         for(Midia m:lista) {
-            File f = new File("/sdcard/Pictures/" + m.getArquivo());
+            File f = new File("sdcard/Pictures/"+m.getArquivo());
             if (!f.exists()) {
                 InputStream input = null;
                 OutputStream output = null;
@@ -56,11 +57,6 @@ public class DownloadTask extends AsyncTask<String, Integer, String> {
 
                     int count;
                     while ((count = input.read(data)) != -1) {
-                        // allow canceling with back button
-                        if (isCancelled()) {
-                            input.close();
-                            return null;
-                        }
                         output.write(data, 0, count);
                     }
                 } catch (Exception e) {
@@ -79,18 +75,28 @@ public class DownloadTask extends AsyncTask<String, Integer, String> {
                 }
             }
         }
+        System.out.println("---------------------- acabou download");
+
+        apagaArquivosNaoUsados();
         return null;
     }
 
-    @Override
-    protected void onPostExecute(String result) {
 
-        if (result != null)
-            Toast.makeText(context, "Download error: " + result, Toast.LENGTH_LONG).show();
-        else
-            Toast.makeText(context, "File downloaded", Toast.LENGTH_SHORT).show();
 
-        final ClasseGlobal classeGlobal = (ClasseGlobal) context.getApplicationContext();
-        classeGlobal.setProgramacaovigente(lista);
+    public void apagaArquivosNaoUsados(){
+        File f = new File("/sdcard/Pictures/");
+        File[] filelist = f.listFiles();
+        for(int i=0;i<filelist.length;i++){
+            Boolean apagar = false;
+            for(Midia m : lista) {
+                if(m.getArquivo()==filelist[i].getName()){
+                    apagar = true;
+                }
+            }
+            if(apagar){
+                filelist[i].delete();
+            }
+        }
     }
+    
 }
